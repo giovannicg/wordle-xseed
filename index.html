@@ -1,0 +1,284 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Wordle Xseed</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one-screen mobile game — header, hint strip, scrolling grid, keyboard pinned at the bottom. Celeste + sun gold, Uruguay party. */
+:root{
+  --bg:#f3f7fb; --surface:#ffffff; --fg:#14202b; --muted:#5b6b7a; --line:#d5dfe8;
+  --accent:#2f86c9; --accent-ink:#ffffff; --sun:#e9a91f;
+  --ok:#3a9a5b; --near:#d9a21b; --miss:#7d8a96; --tile-ink:#ffffff;
+  --key:#dfe7ef; --key-ink:#14202b;
+  --display:"Bricolage Grotesque",ui-rounded,system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1820; --surface:#16222d; --fg:#e8eef4; --muted:#93a4b4; --line:#2a3a48;
+  --accent:#5aa9e6; --accent-ink:#06121c; --sun:#f2bc45;
+  --ok:#3f9e60; --near:#c9961a; --miss:#3e4a55; --tile-ink:#ffffff;
+  --key:#2a3946; --key-ink:#e8eef4; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1820; --surface:#16222d; --fg:#e8eef4; --muted:#93a4b4; --line:#2a3a48;
+  --accent:#5aa9e6; --accent-ink:#06121c; --sun:#f2bc45;
+  --ok:#3f9e60; --near:#c9961a; --miss:#3e4a55; --tile-ink:#ffffff;
+  --key:#2a3946; --key-ink:#e8eef4; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px;box-sizing:border-box;gap:10px}
+h1,h2{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.team{display:flex;align-items:center;gap:10px;min-width:0}
+.sun{width:34px;height:34px;flex:none}
+.team h1{font-size:1.4rem;font-weight:800}
+.team small{display:block;color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}
+.stats{display:flex;gap:14px;font-variant-numeric:tabular-nums;text-align:right}
+.stats b{display:block;font-family:var(--display);font-size:1.15rem}
+.stats span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+/* hints */
+.hints{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.hint{display:flex;gap:8px;align-items:baseline;font-size:.95rem}
+.hint .n{font-family:var(--display);color:var(--sun);font-weight:800;flex:none}
+.hint.locked{color:var(--muted)}
+.next{font-size:.8rem;color:var(--muted)}
+.hints.flash{animation:flash 1.2s ease}
+@keyframes flash{0%{box-shadow:0 0 0 0 var(--sun)}30%{box-shadow:0 0 0 4px var(--sun)}100%{box-shadow:0 0 0 0 transparent}}
+
+/* grid */
+.board{flex:1;overflow-y:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding-block:4px}
+.row{display:grid;gap:6px}
+.tile{width:min(14vw,56px);aspect-ratio:1;max-width:100%;display:grid;place-items:center;border:2px solid var(--line);border-radius:8px;
+  font-family:var(--display);font-weight:800;font-size:clamp(1.3rem,6vw,1.8rem);text-transform:uppercase;background:var(--surface)}
+.tile.filled{border-color:var(--muted)}
+.tile.ok{background:var(--ok);border-color:var(--ok);color:var(--tile-ink)}
+.tile.near{background:var(--near);border-color:var(--near);color:var(--tile-ink)}
+.tile.miss{background:var(--miss);border-color:var(--miss);color:var(--tile-ink)}
+.tile.pop{animation:pop .12s ease}
+@keyframes pop{50%{transform:scale(1.08)}}
+.row.shake{animation:shake .35s}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 70px);transform:translateX(-50%);background:var(--fg);color:var(--bg);
+  padding:8px 14px;border-radius:8px;font-weight:700;font-size:.9rem;z-index:5}
+
+/* keyboard */
+.kb{display:flex;flex-direction:column;gap:6px;padding-bottom:env(safe-area-inset-bottom,0px)}
+.kb .r{display:flex;gap:5px;justify-content:center}
+.k{flex:1;max-width:44px;height:52px;border:0;border-radius:6px;background:var(--key);color:var(--key-ink);font-weight:700;font-size:1rem;padding:0;touch-action:manipulation}
+.k.wide{max-width:68px;flex:1.5;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+.k.ok{background:var(--ok);color:var(--tile-ink)}.k.near{background:var(--near);color:var(--tile-ink)}.k.miss{background:var(--miss);color:var(--tile-ink);opacity:.7}
+
+/* win */
+.win{background:var(--surface);border:2px solid var(--ok);border-radius:14px;padding:16px;text-align:center;display:flex;flex-direction:column;gap:6px}
+.win h2{font-size:1.6rem}
+.win .word{font-family:var(--display);font-size:2.2rem;font-weight:800;letter-spacing:.15em;color:var(--ok)}
+.foot{text-align:center;font-size:.75rem;color:var(--muted)}
+.foot button{background:none;border:0;text-decoration:underline;color:var(--muted);font-size:.75rem;padding:4px}
+
+/* landing + organizer */
+.page{max-width:900px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px;display:flex;flex-direction:column;gap:18px}
+.page h1{font-size:clamp(1.8rem,6vw,2.6rem);font-weight:800}
+.lead{color:var(--muted);max-width:60ch;margin:0;line-height:1.5}
+.pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.pick a{display:block;text-align:center;padding:16px;border-radius:12px;background:var(--surface);border:1px solid var(--line);color:var(--fg);text-decoration:none;font-family:var(--display);font-weight:800;font-size:1.2rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card h2{font-size:1.2rem;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card .w{font-family:var(--display);letter-spacing:.12em;color:var(--accent)}
+.card ol{margin:0;padding-left:1.2em;font-size:.9rem;line-height:1.45;display:flex;flex-direction:column;gap:3px}
+.qr{align-self:center;background:#fff;padding:8px;border-radius:8px;line-height:0}
+.qr img,.qr canvas{width:160px!important;height:160px!important}
+.link{font-size:.75rem;color:var(--muted);word-break:break-all}
+.btn{border:0;border-radius:8px;padding:8px 12px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:.85rem}
+.base{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.base input{flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;font-size:.9rem}
+.rules{font-size:.9rem;color:var(--muted);line-height:1.5;margin:0}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+
+<div id="app"></div>
+
+<script>
+/* ======= CONFIGURACIÓN (editá aquí) ======= */
+const BASE_URL = "https://giovannicg.github.io/wordle-xseed/"; // enlace público del artefacto, para los QR
+const ADMIN_HASH = "organizador-xseed";
+// Pistas: se desbloquean por TIEMPO (minutos) o por INTENTOS, lo que llegue primero.
+const HINT_MINUTES  = [4, 8, 12];
+const HINT_ATTEMPTS = [8, 14, 20];
+// Palabras de 5 letras (sin tilde). Guardadas en base64 para que no se lean de un vistazo.
+const TEAMS = [
+  {w:"QVNBRE8=", h:["Es una comida que en Uruguay se hace casi todos los domingos.","Se necesita fuego, parrilla y paciencia.","Asado con amigos: falta una sola palabra… ¡esa!"]},
+  {w:"VEFOR08=", h:["Es un baile.","Nació en el Río de la Plata.","Gardel lo cantaba."]},
+  {w:"REFUT1M=", h:["Sin esto no hay dashboards ni reportes.","Se guardan en una base de…","Plural de 'dato'."]},
+  {w:"TlVCRVM=", h:["Están en el cielo.","AWS y Azure viven ahí (en sentido figurado).","Plural de lo que en inglés es 'cloud'."]},
+  {w:"UkVERVM=", h:["Las usan los pescadores y los ingenieros.","Instagram y LinkedIn son de este tipo.","Plural de 'red'."]},
+  {w:"UElYRUw=", h:["Es muy, muy pequeño.","Una pantalla tiene millones de ellos.","El punto más chico de una imagen digital."]},
+  {w:"Q0xBVkU=", h:["Es secreta.","Sin ella no entrás a tu cuenta.","Sinónimo de contraseña."]},
+  {w:"QlJJU0E=", h:["No se ve, pero se siente.","Llega del mar en la Rambla.","Viento suave."]},
+];
+/* ========================================= */
+
+const dec = s => decodeURIComponent(escape(atob(s)));
+const app = document.getElementById('app');
+const store = {
+  get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},
+  del(k){try{localStorage.removeItem(k)}catch(e){}}
+};
+const sunSVG = `<svg class="sun" viewBox="0 0 40 40" aria-hidden="true"><g fill="var(--sun)"><circle cx="20" cy="20" r="8"/>${Array.from({length:16},(_,i)=>{const a=i*Math.PI/8,r1=11,r2=i%2?16:18;return `<path d="M${20+Math.cos(a-.12)*r1} ${20+Math.sin(a-.12)*r1}L${20+Math.cos(a)*r2} ${20+Math.sin(a)*r2}L${20+Math.cos(a+.12)*r1} ${20+Math.sin(a+.12)*r1}Z"/>`}).join('')}</g></svg>`;
+
+let timerId = null;
+function route(){
+  clearInterval(timerId); document.onkeydown = null;
+  const h = location.hash.slice(1);
+  const m = h.match(/^equipo-(\d)$/);
+  if (m && TEAMS[+m[1]-1]) return game(+m[1]);
+  if (h === ADMIN_HASH) return admin();
+  landing();
+}
+window.addEventListener('hashchange', route);
+
+/* ---------- landing ---------- */
+function landing(){
+  app.innerHTML = `<div class="page">
+    <div class="team">${sunSVG}<div><small>Juego de integración</small><h1>Wordle Xseed</h1></div></div>
+    <p class="lead">Cada equipo tiene su propia palabra de 5 letras. Elegí tu equipo (o escaneá el QR que te dieron).</p>
+    <div class="pick">${TEAMS.map((_,i)=>`<a href="#equipo-${i+1}">Equipo ${i+1}</a>`).join('')}</div>
+  </div>`;
+}
+
+/* ---------- game ---------- */
+function game(n){
+  const T = TEAMS[n-1], WORD = dec(T.w).toUpperCase(), L = WORD.length, KEY = 'wx-eq'+n;
+  let st = store.get(KEY);
+  if (!st || st.word !== T.w) st = {word:T.w, start:Date.now(), guesses:[], won:false, end:null};
+  let cur = '', shown = unlocked();
+  const save = () => store.set(KEY, st);
+  save();
+
+  function unlocked(){
+    const mins = ((st.end||Date.now()) - st.start)/60000, tries = st.guesses.length;
+    let c = 0; for (let i=0;i<T.h.length;i++) if (mins>=HINT_MINUTES[i] || tries>=HINT_ATTEMPTS[i]) c=i+1;
+    return c;
+  }
+  function score(g){
+    const res = Array(L).fill('miss'), pool = {};
+    for (let i=0;i<L;i++){ if (g[i]===WORD[i]) res[i]='ok'; else pool[WORD[i]]=(pool[WORD[i]]||0)+1; }
+    for (let i=0;i<L;i++) if (res[i]!=='ok' && pool[g[i]]>0){ res[i]='near'; pool[g[i]]--; }
+    return res;
+  }
+  const fmt = ms => { const s=Math.max(0,Math.floor(ms/1000)); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
+
+  app.innerHTML = `<div class="wrap">
+    <div class="top">
+      <div class="team">${sunSVG}<div><small>Wordle Xseed</small><h1>Equipo ${n}</h1></div></div>
+      <div class="stats"><div><b id="time">0:00</b><span>Tiempo</span></div><div><b id="tries">0</b><span>Intentos</span></div></div>
+    </div>
+    <div class="hints" id="hints" aria-live="polite"></div>
+    <div class="board" id="board"></div>
+    <div id="bottom"></div>
+  </div>`;
+  const $ = id => document.getElementById(id);
+
+  function renderHints(){
+    const c = unlocked(), box = $('hints');
+    let html = T.h.map((h,i)=> i<c
+      ? `<div class="hint"><span class="n">Pista ${i+1}</span><span>${h}</span></div>`
+      : '').join('');
+    if (c===0) html = `<div class="hint locked"><span class="n">Pistas</span><span>Todavía no hay pistas. ¡Probá palabras!</span></div>`;
+    if (c<T.h.length && !st.won){
+      const leftMs = st.start + HINT_MINUTES[c]*60000 - Date.now(), leftT = HINT_ATTEMPTS[c]-st.guesses.length;
+      html += `<div class="next">Próxima pista en ${fmt(leftMs)} o en ${leftT} ${leftT===1?'intento':'intentos'}.</div>`;
+    }
+    box.innerHTML = html;
+    if (c>shown){ shown=c; box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash'); toast('¡Nueva pista desbloqueada!'); }
+  }
+  function rowHTML(g, res, cls=''){
+    return `<div class="row ${cls}" style="grid-template-columns:repeat(${L},auto)">${Array.from({length:L},(_,i)=>{
+      const ch = g[i]||''; const c = res?res[i]:(ch?'filled':'');
+      return `<div class="tile ${c}">${ch}</div>`;}).join('')}</div>`;
+  }
+  function renderBoard(scroll=true){
+    const b = $('board');
+    b.innerHTML = st.guesses.map(g=>rowHTML(g,score(g))).join('') + (st.won?'':rowHTML(cur,null,'cur'));
+    if (scroll) b.scrollTop = b.scrollHeight;
+  }
+  function renderBottom(){
+    const bot = $('bottom');
+    if (st.won){
+      bot.innerHTML = `<div class="win"><h2>¡Lo lograron!</h2><div class="word">${WORD}</div>
+        <div>${st.guesses.length} intentos · ${fmt(st.end-st.start)} · ${unlocked()} ${unlocked()===1?'pista':'pistas'}</div>
+        <div class="next">Mostrale esta pantalla al organizador.</div></div>
+        <div class="foot"><button id="reset">Reiniciar en este teléfono</button></div>`;
+    } else {
+      const states = {};
+      st.guesses.forEach(g=>score(g).forEach((r,i)=>{const p=states[g[i]]; if(r==='ok'||(r==='near'&&p!=='ok')||(!p)) states[g[i]]=r;}));
+      const rows = ['QWERTYUIOP','ASDFGHJKLÑ','⏎ZXCVBNM⌫'];
+      bot.innerHTML = `<div class="kb">${rows.map(r=>`<div class="r">${[...r].map(k=>{
+        if (k==='⏎') return `<button class="k wide" data-k="ENTER">Enviar</button>`;
+        if (k==='⌫') return `<button class="k wide" data-k="DEL" aria-label="Borrar">⌫</button>`;
+        return `<button class="k ${states[k]||''}" data-k="${k}">${k}</button>`;}).join('')}</div>`).join('')}</div>
+        <div class="foot"><button id="reset">Reiniciar en este teléfono</button></div>`;
+      bot.querySelectorAll('.k').forEach(b=>b.addEventListener('click',()=>press(b.dataset.k)));
+    }
+    let armed=false; $('reset').addEventListener('click',e=>{
+      if(!armed){armed=true;e.target.textContent='Tocá otra vez para borrar el progreso';setTimeout(()=>{armed=false;e.target.textContent='Reiniciar en este teléfono'},3000);return;}
+      store.del(KEY); route();
+    });
+  }
+  function press(k){
+    if (st.won) return;
+    if (k==='DEL'){ cur=cur.slice(0,-1); renderBoard(false); return; }
+    if (k==='ENTER'){
+      if (cur.length<L){ const r=document.querySelector('.row.cur'); r&&r.classList.add('shake'); setTimeout(()=>r&&r.classList.remove('shake'),400); toast(`La palabra tiene ${L} letras`); return; }
+      st.guesses.push(cur);
+      if (cur===WORD){ st.won=true; st.end=Date.now(); }
+      cur=''; save(); renderBoard(); renderBottom(); renderHints(); tick();
+      return;
+    }
+    if (cur.length<L && /^[A-ZÑ]$/.test(k)){ cur+=k; renderBoard(false); const t=document.querySelectorAll('.row.cur .tile')[cur.length-1]; t&&t.classList.add('pop'); }
+  }
+  document.onkeydown = e => {
+    if (e.metaKey||e.ctrlKey||e.altKey) return;
+    if (e.key==='Enter') press('ENTER'); else if (e.key==='Backspace') press('DEL');
+    else { const k=e.key.normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase(); const kk=e.key.toUpperCase()==='Ñ'?'Ñ':k; if (/^[A-ZÑ]$/.test(kk)) press(kk); }
+  };
+  function tick(){
+    $('time').textContent = fmt((st.end||Date.now())-st.start);
+    $('tries').textContent = st.guesses.length;
+    if (!st.won) renderHints();
+  }
+  renderHints(); renderBoard(); renderBottom(); tick();
+  timerId = setInterval(tick, 1000);
+}
+
+let toastT;
+function toast(msg){
+  let t=document.querySelector('.toast'); if(!t){t=document.createElement('div');t.className='toast';t.setAttribute('role','status');document.body.appendChild(t);}
+  t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,1800);
+}
+
+/* ---------- organizer ---------- */
+// QR ya generados (apuntan a BASE_URL#equipo-N), sin librerías externas.
+const QRS = ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASgAAAEoAQAAAADDfFG0AAACFklEQVR4Xu1aW27DMAyzi9z/yh74kCNn2dADUCuSxekXQUqU1LnGF/H54jsj39oRvCquMab+B9HmWHPNhSPf9CZ4NbyIFCACWviMiQtO603wqiASc4JjJNeYCzCBYjzjm+D1mpmgRWGFm8ilCL/ekKAIwahFUbaaGLx6/upMIrMsykpg4VeLVbKDEJ9/rpwr/Gr8uvMU4GJMMGw/hV8nvwTSWmOBbLj74vPw66x84BJlCfMg2zppW+sp+X6HHZeAok8lSjT4uPMavM76CJRk6dUFETWBp3qZfN/9BJsgAUPA1AXZg1GXwauCSBAkEksNt/i28FFnGbw6XuJTNdw0qzQU7rzDrxZXZfc6ky7ZSkqUyV89PtQbGIW2UQ6CIwpoEfWRNIseN50oPltWalAlkoMdD8QyL/zlv+4ha41Wbcfiv874yHlNGXw5sYEKqUGhKBY9Hv7eD1uGdveqBIQx+evpJ8AvZCy6L1tWdUTJ9w8/4aLojtF2wu2kq2X4dfp7egi6CGQuJS76V5fP4NX8hKcSWg0RqmP3mPzVozDy0F6q9La2JjzxX3e0/XYt08wuugwnt+ix4rq32CiNnErsVZq8f/z9ya/dEBmwPf9i4qc8w6+jPm7DygE099v6CUVNLYJX1+NZAKqDpBgh0fDrqUcvzsAt/ybgnlDET5zx2G87/fclZPaPLZr/+ieSv97y/d8RvCp+AKSpDjps3LMnAAAAAElFTkSuQmCC", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASgAAAEoAQAAAADDfFG0AAACFUlEQVR4Xu2awZLDMAhDzU7//5fZkQQ27rTT3ittNk2TnN4AFriR6wv9ffHO8ltb5tV6rBW6RqDFyshI3KoPPTGvwYukgAi0cKzACXf7iXm1SCICMUZQOFYuhBjv8Yl5vaxMwCRWoauXb73Xr0VhZAQjKpmUA8yvkXivR5d61TAUMFx0eFWMmddWdtohEZ//auVM8xrr46lTLGAKtBC6knnN+BKWzJUINnzWqe47vq6VD85UaQnzINsatK39zfG1BSr8h42gsSclGnze4gLgfGzRoYLSWRnbSHRjZL869GDOMcDYBwGSuqDyYMxLx9dY+RhPyknAomtlv41DfZJ5XU6hqACSmkgBrM7b8TW04SgjNZjQWIeVX37f8TX8qqyDwJAQ/YUWglo+zWvmI0c3ybGEaj4HFHV4nnNLlr5iS7ZV9p4+n4f9/RC5bDzMyENP5tW8jjRfZS+0+0amZ58ZZa5f038pCVW/0Dr2ZEIdkf3Xk5+o9bEaSYmrJe0+Q83xdfnVbn80olD/WMGmvDSvlnaEypv2tPDae4TMa/Cal5rjtF3dO5Hm1Rr729p7LMPa25GaGZrX4NW72N1qdwVrUxH+PcAR99NqDM3esc1EjXWUno6v5/VRideNNnpu9ZSSec18PJJhVbnXzIITCvO6efUkp7tumrCx/2FeR9f+dqXlvQnp+cTMwPErnPdy/XpV783rs/4BwBkWGi0Ect4AAAAASUVORK5CYII=", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASgAAAEoAQAAAADDfFG0AAACDUlEQVR4Xu1ay27DMAyzi/7/L3vgQ7acDkN3J1ckrZMTQckUvbnGF3h98c7IWxvhq/AeY+o7hDbHmmsuLPmmJ+Gr8UWmQBHYwmdMXLBaT8JXgUzMCY1BV/yMNSAxrvFJ+Pq1M80FfYEr3CQuIfrq9bgBmlCJW2jh64l3tXqDynJRVgOLvhpWlR0K8fknrJV6bPV4+hToIiYUtn9FX7e+RNJaY0FsuPvi9ejr4CVnyrJcMA+yrZO2tX5lfzxbokRkVw+fSpZo8HHnNXxdfJEkWnsZiWrzHozSv+56pKCsLE1CgAYj8hh9XfpixaEu1b1cgns8wuP4iQ1ui+UjNAXZhfkb5Ba+Cur3vqr60MEQ61RXSz3e/Yvm1HOjKxLdi6rDdaZ/fe6PJTPvkqSqArH0r8uvyqwi6ZLlQnnafFUglv5VQD7hRIL54DYXCiqst/BVUL6qjFDe/hiLvVmGr8tPiKdtJmwxuCRPET/R/YQMqvbIynbsYevgI/V41aMHayYUOudA/3cMFj/RwRFb1lQhxQkrXKZA9FVwniOazoDtqKJOIsNX8xNnY0QIraRQ2YTITP7VUP6LUxGYqpNaMyXWoq+mrwpydm1WE6uJO/3roCvH4qJ3dXDoF6OvS1+XG6t/zpEfm+xh4eviywdnHLNpLEBaz/LD18bjfNvjdz+ETL7a0PzXH4i+CmHif0z8AN67JgDEf3eHAAAAAElFTkSuQmCC", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASgAAAEoAQAAAADDfFG0AAACGElEQVR4Xu2aS44CMQxEE8T9r5xRfexxJEDsKSOGnk6vnuxK2el91hfx+OKZlac6wqviudbW9dn4rLPWxpcXXgmvyQtkCGjrkrj09Up43ZW2NzKpUurspQ/ucSW8XinTAagjbIcZ9uqpD/FrKgdcSrS1jotR8Wsk3seTUs916D1hARrkjHkWXleAl7fBYgadV6L1SvKr4tk5pITqBMN1S1h4VTwAiKKFIkRqFSgrGVfDa/BCXm1xAjWUoisUC7wdXoMXS3DDaVng8dOaFv91x0FiqQxpIVyOTCteI5Jfl37BRuzDBpLOy6zQTcphhNfcH8GKiKpjHPZedRlegxd0i5MJ/cF/LEU7fEhZeE29R4KJmbpHSpothqiF1+QF6dIcAoVJI2YJq24yvEY9ClOPwOwvaL24Qe7MC/8DmcM9sFIKzaPhyZhF72e4Z+Rc1cnULSSVn3mWeqwoXgbjalR5qgHHSnh1eDPEj11Yu/wy/vH3l35pbk+dqsHhSL/o1x1oDzl9VjqJWg2j3Vemf5z+CzMcHQrZ1rvPpnalH7pjHAOxLucuqTPI6P2Mcb7dB7a1K5pW+scROO8oc19TQnl7n3ZT8OMnKnieVi8COMNqtipBA83wqrhI1MSwpqz0GXAa4fWCF9/PYR3WWKIdWXhd9di2yy80aSDmCQ+eDK/RD/myvKn9qm/LzYZXxfUaztsIrxf69SHCq+IPYHQGKKD1OswAAAAASUVORK5CYII=", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASgAAAEoAQAAAADDfFG0AAACDElEQVR4Xu1a0ZICMQgrjv//yzhJoKXq3Hjv4XTrdvcpE9IAF7l+iMcP7yy/tcN4dTzXCv0G0WJlZCS2atET4zXwIlJELRKAaeVuPzFeHUQigmgBKHxWLlCMe3xivL4rU4JfwAqLyKUwv74hIZYBLCblOBON19SvySQyq5KyBcz8GpGddkjE9786OdP8Gvw6OgW4GAGG7Tvz6+aXQMpcCbJhrUvtm1/3yUcLQdkq2xUraFvbxFrvdwCVMvS1EiUafKy8Gq8LL6Kjy8FsV0SgmfV++C+503L4rIQQKoxIM+N161dCqyTuKrgBUQa2VYSbX5Nfqhwp711EylBU5W39uvmlArvPQxl8CP2By/y69KuJxbJRmq9cxPlImlnvd1Q9RInnDc2q3CvRww/jNfAqN78xKntPfvFjvD7ysY5Cyj6sBBz+PjCdjx9+lcpFG1GHZN2U+jsfp1+lueeXbWj1WGnBui9tvDqeMg90qqeJo6pRNTe+xmvwq/pd5Vc151Cvgq7VfmIGJ0JESKOh8qp0XdpFmF8djVFnJcrH7k0oJT2vnTHm29VO7QG3xpGimPk19b48hHqDuPYoTeIV/n+AEzofq/Gc6lKMgtv9r7eYmabJI7QeByMbh/W283Hm4whWQmpFy5OJccbrwmsrfVdBAG3MP4zXiWu+vS3XHEK6PzFi+K8/wvnYYST+h8QLwkseDsluZPQAAAAASUVORK5CYII=", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASgAAAEoAQAAAADDfFG0AAACEUlEQVR4Xu1a27KCQAzbOv7/L++ZJmkp6Hh4J0EdBF7MpOnN2OsGXjeeWX6qYb4K77WC5zvyWHutyDdOdMd8Tb6SGXADesQaw7TuWF8FMBEBqjaUtbakldd0x3yd+KqABFURKw+JizBfw78KsKy1gyrDxxdWf+AJrL7bpsCWHB4mxti0vs6Qs9O2rocCdT9BOfd+4ww71BFZUpxi0f41EUiKCkMWX/QxlmD5bbn+OqDalNIiPXQ0sga2nB8HNjyLn/L+nV9FGy7ZvxrvKuKzjkA1AW1RXCk7eNk9L3zKUwzE6n1E0QoGJ9h7ChP/4yXfSmUhDtEF0bjobSk181VgcqSSKDJcUYbUsMJ8Tb4kIgUkkyR1Ji5dT5z4Yruo+cRh9RQdleZ4LLwyDkHWrtoL4wnOKmBr9vuBVg6EtUfXDeMXh9bX9Hu2jMqGNZLobsj58aqvootx2eFYIWn/+vD7nndVlkSJUUnSfn+AztRLIRhWVq6ox3CSqrN/jfyYiGSIqyFtiTic1qTHfBVyHs0eu6jqaWF1RY7HgZpPtJxAW28f1YdbX0NfPSJMs1cn2VFJmK8Zj3OSAw8bqZHbNfM1+Trmg1pAagTWLbf5uuZHotYekZrCS6249XWpJ1CEcfCF0qIW3DIy83WKx1r918JDyZK1q/3+Uk8cfwI4BhLaqGkaZn01PlbZX+F4/OJfP2C+Cn+OVfQ3MnmfVQAAAABJRU5ErkJggg==", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASgAAAEoAQAAAADDfFG0AAACB0lEQVR4Xu1ZQY7DQAgLVf//ZVa2YQaqlbZ7N62SZtKTZYyByOeLeH3xn8f/OmG8Ot7PE/oNosWTkZE4qpveGK+BF5EiapEATHee9hvj1UEkIoiWqJWACRTTGdlnvBZeHeQXsMJN5FIYr9+RQC4CLCblqInGa+rXZBKZVUnZAmZ+jchOOyTi56cqZ5pfg19XpwAXI8Cw82R+bX4JpMwnQTbc61Ln5teqfHARQgrmQbZV3qKfrPfDQlDiC54qimXwdQ4ErV/LT5BXAYfKTOQzayQ7JOvX1q+2pke1EtGOlblqfnVUB6QGUoxSCtYbPRmvE4dJNGJFqyqR9Wh+Lb2vEJPIMsgXWiJerV8zXnQPSj+2jZB76FeQeLiG6+PyXwKMZZFgQdI4B+PX85wVrfdnyNqjVUFXCWm9X/6L3dCxWykvJgQ1cDVe00+0uHN4z8SsE3l/+9XtV6ldxa/6fcyFhtP2qysfr5E4vitQI7n2YF/kfFz6RW0vdy93oR6SYzD7iRmsj7Kmd0ixdo/Wrw+8hvQTMrl7bdZqE+l87Bj7bU0Iy7AyDXVg/RrxvlvsSs1sBZPnJ2rm1+DXGeVotX3HOt1xuz5uP9FRo3u2jxKuXh2ZX4tfFzHkYnWQTEYYMfPrQ796oVbFUfyiv+g23Py6lJr7bQYlbCwhPV8dIcvwV5hfHUbif0j8AE6eKvbbUB6HAAAAAElFTkSuQmCC", "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASgAAAEoAQAAAADDfFG0AAACDElEQVR4Xu2aa24CMQyEY8T9r5zK8wgOUIkDzNCqC8uvT/Zk7G3t9YMeP3xn5VtH4WU91ype7+rX2mtV/+JCd8Jr8moyYNOclqixTX0n9WWBRJUqCcS2Sqs/053wunip7XY1qqrVLxUXFV7Dv6xabV+73JfjTAyvi9cxqy2Lh4mxN1Nft+TstK33lxs19XWacLQdq6rb8j3EhtfgVe5CtJ8yGBLGxruV/PWSsin+CE+rESKN0cJSX0ebnqXYBTx729R0EMS/5vkIWN14dC8eko76DBepL6tJaA7yacj3qwCP9MJr8MIs1DnV0yJmSdScDSy85vnYuZ4uzyNRXq9FRfpxSlHLkJQhaGRyskqeeOnRLdcVZhPrC9YbRm8enunH4V9Np+vKXclFjmcj7CrCa56PDBT0KyQvlBc/oLOFl/UEGe0jNDuec5Kll3589y9v7+VadLTTkqmvmxctXUsJOjwXrJ1Zk+9vwZmaj8MpzZ+Whos+JONf079OlEeed7DgDB6//6wvMGKIMDsdkF1h8a+pJzc4/gE4QdL2MPPQG6/zFFvTI/0MFeadRfxr+pfzFoYizEYyruNn4XX5/dkPcinNJQXtjMYWXtZFop/+878AbGjCFl53noBcVQoRmB01QIbXxeusormV4PaeC4vkr1uct5m3xiCkJ2oyttTX0cej7K9KP371+38VXtYfagHwSgG4fe0AAAAASUVORK5CYII="];
+function admin(){
+  app.innerHTML = `<div class="page">
+    <div class="team">${sunSVG}<div><small>Panel del organizador</small><h1>Wordle Xseed</h1></div></div>
+    <p class="rules">Cada QR abre el juego de un equipo. Las pistas aparecen solas a los ${HINT_MINUTES.join(', ')} minutos o a los ${HINT_ATTEMPTS.join(', ')} intentos. Si un equipo se traba antes, leele la pista en voz alta desde acá. No compartas esta página con los jugadores.</p>
+    <div class="cards">${TEAMS.map((t,i)=>`<div class="card">
+      <h2><span>Equipo ${i+1}</span><span class="w">${dec(t.w)}</span></h2>
+      <ol>${t.h.map(h=>`<li>${h}</li>`).join('')}</ol>
+      <div class="qr"><img src="${QRS[i]}" alt="Código QR del equipo ${i+1}" width="160" height="160"></div>
+      <div class="link">${BASE_URL}#equipo-${i+1}</div>
+    </div>`).join('')}</div>
+  </div>`;
+}
+
+route();
+</script>
+</body></html>
